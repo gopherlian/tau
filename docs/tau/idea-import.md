@@ -28,7 +28,7 @@ lives in a `.tau` folder next to it.
 | Gitignored files | `.idea` is imported even when git ignores it: Tau always scans `.idea` and `.tau`.                                                                                                                                    |
 | Errors           | If the twin cannot be written, Tau shows a "Failed to set local debug scenarios" notification.                                                                                                                        |
 | Symlinks         | If `.tau` or one of its files is a symlink, Tau writes nothing and shows the same notification: the import runs before the worktree is trusted, so it never writes through a link a repository could point elsewhere. |
-| Nested projects  | A `.idea` folder in a subfolder gets its own `.tau` twin next to it.                                                                                                                                                  |
+| Nested folders   | Only the `.idea` folder at the root of the project is imported. `.idea` folders in subfolders, which are often vendored code, are left alone.                                                                         |
 
 ## Mapping
 

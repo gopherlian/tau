@@ -203,3 +203,29 @@ async fn test_deleting_the_tau_twin_imports_again(cx: &mut TestAppContext) {
     assert_eq!(scenarios.len(), 1, "{scenarios:?}");
     assert_eq!(scenarios[0].1.label.as_ref(), "API server");
 }
+
+#[gpui::test]
+async fn test_only_the_root_idea_folder_is_imported(cx: &mut TestAppContext) {
+    init_test(cx);
+    TaskStore::init(None);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/dir"),
+        json!({
+            "vendor": { "library": project_tree() },
+            "main.py": "",
+        }),
+    )
+    .await;
+    let before = fs.files_with_contents(Path::new(path!("/dir")));
+
+    let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
+    cx.run_until_parked();
+
+    assert_eq!(
+        fs.files_with_contents(Path::new(path!("/dir"))),
+        before,
+        "a nested .idea folder must not get a twin"
+    );
+    assert_eq!(debug_scenarios(&project, cx).await, Vec::new());
+}
