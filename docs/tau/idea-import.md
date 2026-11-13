@@ -20,7 +20,7 @@ lives in a `.tau` folder next to it.
 | Topic            | Behaviour                                                                                                                                                                                                             |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | What is read     | `.idea/runConfigurations/*.xml`, the `RunManager` in `.idea/workspace.xml`, `.idea/modules.xml`, and the `go.mod` next to `.idea`. Read only.                                                                         |
-| What is written  | Only the `.tau` folder. `.tau/.gitignore` contains `*`, so git ignores the twin.                                                                                                                                      |
+| What is written  | Only the `.tau` folder. When `.tau/.gitignore` does not exist, Tau creates it with `*`, so git ignores the twin.                                                                                                      |
 | Editing          | `.tau/debug.json` is yours: edit it like `.zed/debug.json`. Tau never overwrites it.                                                                                                                                  |
 | Importing again  | Delete `.tau` (or just `.tau/debug.json`). Tau imports again right away.                                                                                                                                              |
 | When it runs     | When the project opens and whenever `.idea` changes, as long as `.tau/debug.json` does not exist.                                                                                                                     |
@@ -44,7 +44,8 @@ Macros are expanded:
 - `$PROJECT_DIR$` → `${ZED_WORKTREE_ROOT}`, plus the folder that holds `.idea`
   when it is not the worktree root.
 - `$MODULE_DIR$` → the folder of the module's `.iml` file, found through
-  `.idea/modules.xml`.
+  `.idea/modules.xml`. As in IntelliJ, a module file stored inside `.idea` is
+  rooted at the folder that holds `.idea`.
 - `$USER_HOME$` → your home folder.
 
 Parameters are split the way IntelliJ splits them: double quotes group words,
