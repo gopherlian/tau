@@ -42,8 +42,9 @@ if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
     exit 1
 fi
 
-if ! tag=$(git describe --tags --exact-match HEAD 2>/dev/null); then
-    echo "HEAD has no tag; tag the release first, for example: git tag -a v0.1.0 -m \"Tau 0.1.0\"" >&2
+# Without --tags, git describe only matches annotated tags, which the release process requires.
+if ! tag=$(git describe --exact-match HEAD 2>/dev/null); then
+    echo "HEAD has no annotated tag; tag the release first, for example: git tag -a v0.1.0 -m \"Tau 0.1.0\"" >&2
     exit 1
 fi
 if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
@@ -64,7 +65,12 @@ script/bundle-linux --skip-sentry
 target_dir="${CARGO_TARGET_DIR:-target}"
 arch=$(uname -m)
 archive="tau-${version}-linux-${arch}.tar.gz"
-mv "${target_dir}/release/zed-linux-${arch}.tar.gz" "${target_dir}/release/${archive}"
+bundle="${target_dir}/release/zed-linux-${arch}.tar.gz"
+if [[ ! -f "$bundle" ]]; then
+    echo "script/bundle-linux did not produce ${bundle}." >&2
+    exit 1
+fi
+mv "$bundle" "${target_dir}/release/${archive}"
 (cd "${target_dir}/release" && sha256sum "${archive}" > "${archive}.sha256")
 
 echo "Built ${target_dir}/release/${archive}"
