@@ -17,17 +17,18 @@ lives in a `.tau` folder next to it.
 
 ## How the twin works
 
-| Topic            | Behaviour                                                                                                                                                                 |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| What is read     | `.idea/runConfigurations/*.xml`, the `RunManager` in `.idea/workspace.xml`, `.idea/modules.xml`, and the `go.mod` next to `.idea`. Read only.                             |
-| What is written  | Only the `.tau` folder. `.tau/.gitignore` contains `*`, so git ignores the twin.                                                                                          |
-| Editing          | `.tau/debug.json` is yours: edit it like `.zed/debug.json`. Tau never overwrites it.                                                                                      |
-| Importing again  | Delete `.tau` (or just `.tau/debug.json`). Tau imports again right away.                                                                                                  |
-| When it runs     | When the project opens and whenever `.idea` changes, as long as `.tau/debug.json` does not exist.                                                                         |
-| Trust            | The scenarios load only in trusted worktrees, like `.zed/debug.json` and `.vscode/launch.json`. The twin files themselves are written before that, because they are data. |
-| Gitignored files | `.idea` is imported even when git ignores it: Tau always scans `.idea` and `.tau`.                                                                                        |
-| Errors           | If the twin cannot be written, Tau shows a "Failed to set local debug scenarios" notification.                                                                            |
-| Nested projects  | A `.idea` folder in a subfolder gets its own `.tau` twin next to it.                                                                                                      |
+| Topic            | Behaviour                                                                                                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What is read     | `.idea/runConfigurations/*.xml`, the `RunManager` in `.idea/workspace.xml`, `.idea/modules.xml`, and the `go.mod` next to `.idea`. Read only.                                                                         |
+| What is written  | Only the `.tau` folder. `.tau/.gitignore` contains `*`, so git ignores the twin.                                                                                                                                      |
+| Editing          | `.tau/debug.json` is yours: edit it like `.zed/debug.json`. Tau never overwrites it.                                                                                                                                  |
+| Importing again  | Delete `.tau` (or just `.tau/debug.json`). Tau imports again right away.                                                                                                                                              |
+| When it runs     | When the project opens and whenever `.idea` changes, as long as `.tau/debug.json` does not exist.                                                                                                                     |
+| Trust            | The scenarios load only in trusted worktrees, like `.zed/debug.json` and `.vscode/launch.json`. The twin files themselves are written before that, because they are data.                                             |
+| Gitignored files | `.idea` is imported even when git ignores it: Tau always scans `.idea` and `.tau`.                                                                                                                                    |
+| Errors           | If the twin cannot be written, Tau shows a "Failed to set local debug scenarios" notification.                                                                                                                        |
+| Symlinks         | If `.tau` or one of its files is a symlink, Tau writes nothing and shows the same notification: the import runs before the worktree is trusted, so it never writes through a link a repository could point elsewhere. |
+| Nested projects  | A `.idea` folder in a subfolder gets its own `.tau` twin next to it.                                                                                                                                                  |
 
 ## Mapping
 
