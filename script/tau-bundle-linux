@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+help_info() {
+  echo "
+Usage: ${0##*/} [options]
+Build a Tau release package for Linux from a tagged release branch.
+
+Wraps script/bundle-linux and writes target/release/tau-<version>-linux-<arch>.tar.gz
+and its .sha256 file. See docs/tau/versioning.md.
+
+Options:
+  -h, --help    Display this help and exit.
+  "
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            help_info
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            help_info
+            exit 1
+            ;;
+    esac
+done
+
+cd "$(dirname "$0")/.."
+
+channel=$(<crates/zed/RELEASE_CHANNEL)
+if [[ "$channel" != "stable" ]]; then
+    echo "crates/zed/RELEASE_CHANNEL is '$channel', but release packages are built from a release branch where it is 'stable'." >&2
+    exit 1
+fi
+
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+    echo "The working tree has uncommitted changes; release packages are built from a clean tag." >&2
+    exit 1
+fi
+
+if ! tag=$(git describe --tags --exact-match HEAD 2>/dev/null); then
+    echo "HEAD has no tag; tag the release first, for example: git tag -a v0.1.0 -m \"Tau 0.1.0\"" >&2
+    exit 1
+fi
+if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+    echo "Tag '$tag' is not a vMAJOR.MINOR.PATCH semantic version tag." >&2
+    exit 1
+fi
+version="${BASH_REMATCH[1]}"
+
+# Zed's update server would replace Tau with Zed, so automatic updates are turned
+# off at compile time, the same way Linux distributions package Zed.
+export ZED_UPDATE_EXPLANATION="Tau does not update itself yet. Download new versions from https://github.com/gopherlian/tau/releases"
+# Official Zed builds link the remote server against musl, which needs musl-gcc.
+# A glibc remote server is enough here: Tau's client downloads Zed's remote server.
+export REMOTE_SERVER_TARGET="${REMOTE_SERVER_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}"
+
+script/bundle-linux --skip-sentry
+
+target_dir="${CARGO_TARGET_DIR:-target}"
+arch=$(uname -m)
+archive="tau-${version}-linux-${arch}.tar.gz"
+mv "${target_dir}/release/zed-linux-${arch}.tar.gz" "${target_dir}/release/${archive}"
+(cd "${target_dir}/release" && sha256sum "${archive}" > "${archive}.sha256")
+
+echo "Built ${target_dir}/release/${archive}"
