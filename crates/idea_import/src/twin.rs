@@ -20,6 +20,10 @@ pub enum TwinOutcome {
 
 /// Imports the `.idea` folder in `project_directory` into a `.tau` twin next to it, unless
 /// `.tau/debug.json` already exists. `.idea` is only read; every write goes under `.tau`.
+///
+/// This runs on repository content before the worktree is trusted, so it refuses to write
+/// through a symlinked `.tau` or twin file: a cloned repository could otherwise point them at
+/// files such as `~/.bashrc` or the global `debug.json`.
 pub async fn ensure_twin(
     fs: &dyn Fs,
     project_directory: &Path,
@@ -31,9 +35,15 @@ pub async fn ensure_twin(
         return Ok(TwinOutcome::NoIdeaFolder);
     }
     let twin_directory = project_directory.join(paths::local_tau_folder_name());
+    ensure_not_symlink(fs, &twin_directory).await?;
     let debug_file = twin_directory.join(paths::debug_task_file_name());
     if fs.metadata(&debug_file).await?.is_some() {
         return Ok(TwinOutcome::AlreadyExists);
+    }
+    let gitignore = twin_directory.join(".gitignore");
+    let report_file = twin_directory.join("idea-import-report.md");
+    for twin_file in [&gitignore, &report_file, &debug_file] {
+        ensure_not_symlink(fs, twin_file).await?;
     }
 
     let project = read_idea_project(fs, project_directory, directory_in_worktree, user_home).await;
@@ -42,13 +52,11 @@ pub async fn ensure_twin(
     fs.create_dir(&twin_directory)
         .await
         .with_context(|| format!("creating {twin_directory:?}"))?;
-    let gitignore = twin_directory.join(".gitignore");
     if fs.metadata(&gitignore).await?.is_none() {
         fs.write(&gitignore, b"*\n")
             .await
             .with_context(|| format!("writing {gitignore:?}"))?;
     }
-    let report_file = twin_directory.join("idea-import-report.md");
     fs.write(&report_file, import.report.to_markdown().as_bytes())
         .await
         .with_context(|| format!("writing {report_file:?}"))?;
@@ -62,6 +70,15 @@ pub async fn ensure_twin(
     .with_context(|| format!("writing {debug_file:?}"))?;
 
     Ok(TwinOutcome::Created(import.report))
+}
+
+async fn ensure_not_symlink(fs: &dyn Fs, path: &Path) -> Result<()> {
+    // `metadata` follows links, and some file systems report a dangling link as missing, so
+    // only `read_link` tells reliably whether the path itself is a link.
+    if fs.read_link(path).await.is_ok() {
+        anyhow::bail!("{path:?} is a symlink, so Tau refuses to write the `.tau` twin through it");
+    }
+    Ok(())
 }
 
 fn debug_file_contents(debug_scenarios: &DebugTaskFile) -> Result<String> {
@@ -336,5 +353,90 @@ mod tests {
             "unreadable files should be reported: {:?}",
             report.notes
         );
+    }
+
+    #[gpui::test]
+    async fn test_symlinked_twin_folder_is_refused(cx: &mut TestAppContext) {
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree("/home/user/.config/zed", json!({ "settings.json": "{}\n" }))
+            .await;
+        fs.insert_tree(
+            "/project",
+            json!({ ".idea": { "runConfigurations": { "API_server.xml": API_SERVER } } }),
+        )
+        .await;
+        fs.insert_symlink("/project/.tau", PathBuf::from("/home/user/.config/zed"))
+            .await;
+        let before = snapshot(&fs);
+
+        let result = ensure_twin(fs.as_ref(), Path::new("/project"), "", None).await;
+
+        let error = result.expect_err("a symlinked .tau must not be written through");
+        assert!(error.to_string().contains("symlink"), "{error:#}");
+        assert_eq!(snapshot(&fs), before);
+    }
+
+    #[gpui::test]
+    async fn test_symlinked_twin_files_are_refused(cx: &mut TestAppContext) {
+        for file_name in [".gitignore", "idea-import-report.md", "debug.json"] {
+            let fs = FakeFs::new(cx.executor());
+            fs.insert_tree("/home/user", json!({ ".bashrc": "echo hello\n" }))
+                .await;
+            fs.insert_tree(
+                "/project",
+                json!({
+                    ".idea": { "runConfigurations": { "API_server.xml": API_SERVER } },
+                    ".tau": {},
+                }),
+            )
+            .await;
+            // Both a live link and a dangling one must be refused.
+            fs.insert_symlink(
+                format!("/project/.tau/{file_name}"),
+                PathBuf::from("/home/user/.bashrc"),
+            )
+            .await;
+            fs.insert_symlink(
+                "/project/.tau/link-to-missing",
+                PathBuf::from("/home/user/.config/zed/debug.json"),
+            )
+            .await;
+            let before = snapshot(&fs);
+
+            let result = ensure_twin(fs.as_ref(), Path::new("/project"), "", None).await;
+
+            if file_name == "debug.json" {
+                // The existing debug.json counts as a twin that belongs to the user.
+                assert_eq!(result.unwrap(), TwinOutcome::AlreadyExists);
+            } else {
+                let error = result.expect_err("twin files must not be written through symlinks");
+                assert!(error.to_string().contains("symlink"), "{error:#}");
+            }
+            assert_eq!(
+                snapshot(&fs),
+                before,
+                "nothing may be written ({file_name})"
+            );
+        }
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/project",
+            json!({
+                ".idea": { "runConfigurations": { "API_server.xml": API_SERVER } },
+                ".tau": {},
+            }),
+        )
+        .await;
+        fs.insert_symlink(
+            "/project/.tau/debug.json",
+            PathBuf::from("/home/user/.config/zed/debug.json"),
+        )
+        .await;
+        let before = snapshot(&fs);
+        let result = ensure_twin(fs.as_ref(), Path::new("/project"), "", None).await;
+        let error = result.expect_err("a dangling debug.json symlink must not be written through");
+        assert!(error.to_string().contains("symlink"), "{error:#}");
+        assert_eq!(snapshot(&fs), before);
     }
 }
