@@ -392,6 +392,12 @@ fn parse_module_directories(
                 let Some(module_name) = file_name.strip_suffix(".iml") else {
                     continue;
                 };
+                // Mirrors IntelliJ's `PathMacroUtil.getModuleDir`: a module file stored inside
+                // `.idea` is rooted at the folder that holds `.idea`.
+                let directory = match directory.rsplit_once('/') {
+                    Some((parent, ".idea")) if !parent.is_empty() => parent,
+                    _ => directory,
+                };
                 let directory = MacroExpander::new(context, None).expand(directory);
                 module_directories.insert(module_name.to_owned(), directory);
             }
@@ -1112,6 +1118,42 @@ mod tests {
             result.report.skipped[2].reason
         );
         assert_eq!(result.report.notes, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_module_dir_follows_intellij_for_modules_stored_in_idea() {
+        let configuration = |module: &str| {
+            format!(
+                r#"<configuration name="run" type="PythonConfigurationType" factoryName="Python">
+                    <module name="{module}" />
+                    <option name="SDK_HOME" value="/usr/bin/python3" />
+                    <option name="SCRIPT_NAME" value="$MODULE_DIR$/main.py" />
+                </configuration>"#
+            )
+        };
+        let modules_xml = r#"<project version="4">
+            <component name="ProjectModuleManager">
+              <modules>
+                <module fileurl="file://$PROJECT_DIR$/.idea/service.iml" filepath="$PROJECT_DIR$/.idea/service.iml" />
+                <module fileurl="file://$PROJECT_DIR$/tools/tools.iml" filepath="$PROJECT_DIR$/tools/tools.iml" />
+              </modules>
+            </component>
+          </project>"#;
+
+        for (module, expected_program) in [
+            // IntelliJ treats a module file stored in `.idea` as rooted at the project.
+            ("service", "${ZED_WORKTREE_ROOT}/main.py"),
+            ("tools", "${ZED_WORKTREE_ROOT}/tools/main.py"),
+        ] {
+            let mut project = single_configuration_project(&configuration(module));
+            project.modules_xml = Some(modules_xml.to_owned());
+            let result = import(&project);
+            assert_eq!(
+                result.debug_scenarios.0[0].config["program"], expected_program,
+                "module {module}"
+            );
+            assert_eq!(result.report.imported[0].warnings, Vec::<String>::new());
+        }
     }
 
     #[test]
