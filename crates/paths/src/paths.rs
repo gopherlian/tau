@@ -537,6 +537,25 @@ pub fn local_vscode_launch_file_relative_path() -> &'static RelPath {
     *CACHED
 }
 
+/// Returns the name of the JetBrains `.idea` folder within a project, which Tau only reads.
+pub fn local_jetbrains_folder_name() -> &'static str {
+    ".idea"
+}
+
+/// Returns the name of the `.tau` folder within a project, where Tau keeps the twin
+/// imported from `.idea`.
+pub fn local_tau_folder_name() -> &'static str {
+    ".tau"
+}
+
+/// Returns the relative path to the twin's `debug.json` file within a project.
+/// .tau/debug.json
+pub fn local_tau_debug_file_relative_path() -> &'static RelPath {
+    static CACHED: LazyLock<&'static RelPath> =
+        LazyLock::new(|| RelPath::from_unix_str(".tau/debug.json").unwrap());
+    *CACHED
+}
+
 pub fn user_ssh_config_file() -> PathBuf {
     home_dir().join(".ssh/config")
 }

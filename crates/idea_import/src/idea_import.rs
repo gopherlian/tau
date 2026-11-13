@@ -10,8 +10,12 @@ use quick_xml::{
 use serde_json::{Map, Value};
 use task::{DebugScenario, DebugTaskFile, TcpArgumentsTemplate};
 
-/// The JetBrains project files the importer reads. Callers load them read-only; this crate
-/// never touches the file system.
+mod twin;
+
+pub use twin::{TwinOutcome, ensure_twin};
+
+/// The JetBrains project files the importer reads. [`import`] never touches the file system;
+/// [`ensure_twin`] loads these files read-only.
 #[derive(Clone, Debug, Default)]
 pub struct IdeaProject {
     /// Directory that contains `.idea`, relative to the worktree root, with `/` separators.
@@ -24,6 +28,8 @@ pub struct IdeaProject {
     pub modules_xml: Option<String>,
     /// `go.mod` next to `.idea`, used to turn Go package import paths into directories.
     pub go_mod: Option<String>,
+    /// Files that exist but could not be loaded, reported as notes.
+    pub read_errors: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -80,7 +86,10 @@ pub fn import(project: &IdeaProject) -> IdeaImport {
             format!("${{ZED_WORKTREE_ROOT}}/{}", project.directory_in_worktree),
         )
     };
-    let mut report = ImportReport::default();
+    let mut report = ImportReport {
+        notes: project.read_errors.clone(),
+        ..ImportReport::default()
+    };
     let mut context = ImportContext {
         project_directory,
         user_home: project.user_home.clone(),
@@ -903,6 +912,7 @@ mod tests {
             workspace_xml: Some(include_str!("../test_data/workspace.xml").to_owned()),
             modules_xml: Some(include_str!("../test_data/modules.xml").to_owned()),
             go_mod: Some(include_str!("../test_data/go.mod").to_owned()),
+            read_errors: Vec::new(),
         }
     }
 

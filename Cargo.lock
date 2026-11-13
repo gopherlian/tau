@@ -8584,9 +8584,14 @@ name = "idea_import"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "fs",
+ "futures 0.3.34",
+ "gpui",
+ "paths",
  "pretty_assertions",
  "quick-xml 0.41.0",
  "serde_json",
+ "settings_json",
  "task",
 ]
 
