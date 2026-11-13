@@ -31,6 +31,7 @@ Python, Java and Kotlin. Heavy daily use of terminal AI agents.
 | 2026-11-13 | The `.idea` importer is the first prototype: it is new code with no prior art, it can be tested in isolation, and it produces the debug configurations the debugger work will use. |
 | 2026-11-13 | Tau documentation lives in `docs/tau/`, outside Zed's mdBook, so the repository's Prettier check covers it and upstream merges do not conflict.                                    |
 | 2026-11-13 | The `.idea` twin lives in the project, in `.tau/`, with a `.gitignore` containing `*`; once created it belongs to the user and is never overwritten.                               |
+| 2026-11-13 | Tau follows Semantic Versioning, starting at `0.1.0` (initial development), independently of the Zed version it is based on. See [Versioning and releases](versioning.md).         |
 
 ## Why Zed
 
@@ -64,6 +65,8 @@ and [Landscape inventory](research/02-landscape-inventory.md).
   hooks into existing code over broad edits to upstream files.
 - Tau's changes and features are tracked in
   [GitHub Issues](https://github.com/gopherlian/tau/issues).
+- Releases follow [Versioning and releases](versioning.md); changes are listed
+  in the [changelog](../../CHANGELOG.md).
 
 ## Roadmap
 
