@@ -30,6 +30,7 @@ Python, Java and Kotlin. Heavy daily use of terminal AI agents.
 | 2026-11-13 | Name: Tau. Zeta was avoided because Zed may use it for its edit-prediction model (unverified).                                                                                     |
 | 2026-11-13 | The `.idea` importer is the first prototype: it is new code with no prior art, it can be tested in isolation, and it produces the debug configurations the debugger work will use. |
 | 2026-11-13 | Tau documentation lives in `docs/tau/`, outside Zed's mdBook, so the repository's Prettier check covers it and upstream merges do not conflict.                                    |
+| 2026-11-13 | The `.idea` twin lives in the project, in `.tau/`, with a `.gitignore` containing `*`; once created it belongs to the user and is never overwritten.                               |
 
 ## Why Zed
 
@@ -73,7 +74,8 @@ and [Landscape inventory](research/02-landscape-inventory.md).
 3. `.idea` importer: parse `runConfigurations/*.xml`, `workspace.xml`
    (RunManager, breakpoints), `misc.xml` and `.iml` files, and produce Zed
    debug scenarios in a separate config directory. See
-   [`.idea` import](research/05-idea-import.md).
+   [`.idea` import](research/05-idea-import.md). The first version imports run
+   configurations into a `.tau` twin: see [how it works](idea-import.md).
 4. Inline values resolver and renderer: study
    `platform/xdebugger-impl/ui/.../inline/` in intellij-community and Zed's
    `debugger.scm` tree-sitter queries. See
