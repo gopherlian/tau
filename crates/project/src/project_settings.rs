@@ -27,13 +27,7 @@ use settings::{
     LocalSettingsPath, RegisterSetting, SemanticTokenRules, Settings, SettingsLocation,
     SettingsStore, parse_json_with_comments, watch_config_file,
 };
-use std::{
-    cell::OnceCell,
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-    sync::Arc,
-    time::Duration,
-};
+use std::{cell::OnceCell, collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use task::{DebugTaskFile, TaskTemplates, VsCodeDebugTaskFile, VsCodeTaskFile};
 use util::{ResultExt, rel_path::RelPath, serde::default_true};
 use worktree::{PathChange, UpdatedEntriesSet, Worktree, WorktreeId};
@@ -1264,11 +1258,9 @@ impl SettingsObserver {
         };
 
         let mut settings_contents = Vec::new();
-        let mut tau_twin_directories = BTreeSet::new();
+        let mut import_root_tau_twin = false;
         for (path, _, change) in changes.iter() {
-            if let Some(directory) = Self::tau_twin_directory(path, change) {
-                tau_twin_directories.insert(directory);
-            }
+            import_root_tau_twin |= Self::affects_root_tau_twin(path, change);
             let (settings_dir, kind) = if path.ends_with(local_settings_file_relative_path()) {
                 let settings_dir = path
                     .ancestors()
@@ -1420,8 +1412,8 @@ impl SettingsObserver {
             });
         }
 
-        for directory in tau_twin_directories {
-            self.ensure_tau_twin(worktree, &directory, fs.clone(), cx);
+        if import_root_tau_twin {
+            self.ensure_root_tau_twin(worktree, fs.clone(), cx);
         }
 
         if settings_contents.is_empty() {
@@ -1452,34 +1444,25 @@ impl SettingsObserver {
         .detach();
     }
 
-    /// The directory whose `.tau` twin should be imported after `path` changed: the one holding
-    /// a changed `.idea` folder, or the one whose `.tau/debug.json` was deleted, since deleting
-    /// the twin is how users ask for a fresh import.
-    fn tau_twin_directory(path: &RelPath, change: &PathChange) -> Option<Arc<RelPath>> {
-        if path.ends_with(local_tau_debug_file_relative_path()) {
-            if change != &PathChange::Removed {
-                return None;
-            }
-            return path
-                .ancestors()
-                .nth(local_tau_debug_file_relative_path().components().count())
-                .map(Arc::from);
+    /// Whether the worktree root's `.tau` twin should be imported after `path` changed: its
+    /// `.idea` folder changed, or its `.tau/debug.json` was deleted, since deleting the twin is
+    /// how users ask for a fresh import. Nested `.idea` folders are not imported, because they
+    /// are often vendored code.
+    fn affects_root_tau_twin(path: &RelPath, change: &PathChange) -> bool {
+        if path == local_tau_debug_file_relative_path() {
+            return change == &PathChange::Removed;
         }
-        path.ancestors()
-            .find(|ancestor| ancestor.file_name() == Some(local_jetbrains_folder_name()))?
-            .parent()
-            .map(Arc::from)
+        path.components().next() == Some(local_jetbrains_folder_name())
     }
 
-    fn ensure_tau_twin(
+    fn ensure_root_tau_twin(
         &self,
         worktree: &Entity<Worktree>,
-        directory: &RelPath,
         fs: Arc<dyn Fs>,
         cx: &mut Context<Self>,
     ) {
-        let project_directory = worktree.read(cx).absolutize(directory);
-        let directory_in_worktree = directory.as_unix_str().to_owned();
+        let project_directory = worktree.read(cx).abs_path().to_path_buf();
+        let directory_in_worktree = String::new();
         let user_home = paths::home_dir().to_string_lossy().into_owned();
         cx.spawn(async move |this, cx| {
             let result = idea_import::ensure_twin(
