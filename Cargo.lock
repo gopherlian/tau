@@ -13977,6 +13977,7 @@ dependencies = [
  "globset",
  "gpui",
  "http_client",
+ "idea_import",
  "image",
  "indexmap 2.14.2",
  "itertools 0.14.0",

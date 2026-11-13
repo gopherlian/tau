@@ -9,8 +9,9 @@ use gpui::{AsyncApp, BorrowAppContext, Context, Entity, EventEmitter, Subscripti
 use lsp::{DEFAULT_LSP_REQUEST_TIMEOUT_SECS, LanguageServerName};
 use paths::{
     EDITORCONFIG_NAME, debug_task_file_name, local_debug_file_relative_path,
-    local_settings_file_relative_path, local_tasks_file_relative_path,
-    local_vscode_launch_file_relative_path, local_vscode_tasks_file_relative_path, task_file_name,
+    local_jetbrains_folder_name, local_settings_file_relative_path, local_tasks_file_relative_path,
+    local_tau_debug_file_relative_path, local_vscode_launch_file_relative_path,
+    local_vscode_tasks_file_relative_path, task_file_name,
 };
 use rpc::{
     AnyProtoClient, TypedEnvelope,
@@ -26,7 +27,13 @@ use settings::{
     LocalSettingsPath, RegisterSetting, SemanticTokenRules, Settings, SettingsLocation,
     SettingsStore, parse_json_with_comments, watch_config_file,
 };
-use std::{cell::OnceCell, collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    cell::OnceCell,
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
+};
 use task::{DebugTaskFile, TaskTemplates, VsCodeDebugTaskFile, VsCodeTaskFile};
 use util::{ResultExt, rel_path::RelPath, serde::default_true};
 use worktree::{PathChange, UpdatedEntriesSet, Worktree, WorktreeId};
@@ -1257,7 +1264,11 @@ impl SettingsObserver {
         };
 
         let mut settings_contents = Vec::new();
+        let mut tau_twin_directories = BTreeSet::new();
         for (path, _, change) in changes.iter() {
+            if let Some(directory) = Self::tau_twin_directory(path, change) {
+                tau_twin_directories.insert(directory);
+            }
             let (settings_dir, kind) = if path.ends_with(local_settings_file_relative_path()) {
                 let settings_dir = path
                     .ancestors()
@@ -1306,6 +1317,18 @@ impl SettingsObserver {
                     .ancestors()
                     .nth(
                         local_vscode_tasks_file_relative_path()
+                            .components()
+                            .count()
+                            .saturating_sub(1),
+                    )
+                    .unwrap()
+                    .into();
+                (settings_dir, LocalSettingsKind::Debug)
+            } else if path.ends_with(local_tau_debug_file_relative_path()) {
+                let settings_dir = path
+                    .ancestors()
+                    .nth(
+                        local_tau_debug_file_relative_path()
                             .components()
                             .count()
                             .saturating_sub(1),
@@ -1397,6 +1420,10 @@ impl SettingsObserver {
             });
         }
 
+        for directory in tau_twin_directories {
+            self.ensure_tau_twin(worktree, &directory, fs.clone(), cx);
+        }
+
         if settings_contents.is_empty() {
             return;
         }
@@ -1421,6 +1448,70 @@ impl SettingsObserver {
                     )
                 })
             })
+        })
+        .detach();
+    }
+
+    /// The directory whose `.tau` twin should be imported after `path` changed: the one holding
+    /// a changed `.idea` folder, or the one whose `.tau/debug.json` was deleted, since deleting
+    /// the twin is how users ask for a fresh import.
+    fn tau_twin_directory(path: &RelPath, change: &PathChange) -> Option<Arc<RelPath>> {
+        if path.ends_with(local_tau_debug_file_relative_path()) {
+            if change != &PathChange::Removed {
+                return None;
+            }
+            return path
+                .ancestors()
+                .nth(local_tau_debug_file_relative_path().components().count())
+                .map(Arc::from);
+        }
+        path.ancestors()
+            .find(|ancestor| ancestor.file_name() == Some(local_jetbrains_folder_name()))?
+            .parent()
+            .map(Arc::from)
+    }
+
+    fn ensure_tau_twin(
+        &self,
+        worktree: &Entity<Worktree>,
+        directory: &RelPath,
+        fs: Arc<dyn Fs>,
+        cx: &mut Context<Self>,
+    ) {
+        let project_directory = worktree.read(cx).absolutize(directory);
+        let directory_in_worktree = directory.as_unix_str().to_owned();
+        let user_home = paths::home_dir().to_string_lossy().into_owned();
+        cx.spawn(async move |this, cx| {
+            let result = idea_import::ensure_twin(
+                fs.as_ref(),
+                &project_directory,
+                &directory_in_worktree,
+                Some(user_home),
+            )
+            .await;
+            match result {
+                Ok(idea_import::TwinOutcome::Created(report)) => log::info!(
+                    "imported {} run configurations from {project_directory:?} into its .tau twin",
+                    report.imported.len()
+                ),
+                Ok(
+                    idea_import::TwinOutcome::AlreadyExists
+                    | idea_import::TwinOutcome::NoIdeaFolder,
+                ) => {}
+                Err(error) => {
+                    let debug_file =
+                        project_directory.join(local_tau_debug_file_relative_path().as_std_path());
+                    this.update(cx, |_, cx| {
+                        cx.emit(SettingsObserverEvent::LocalDebugScenariosUpdated(Err(
+                            InvalidSettingsError::Debug {
+                                path: debug_file,
+                                message: format!("Could not import `.idea` into `.tau`: {error:#}"),
+                            },
+                        )));
+                    })
+                    .log_err();
+                }
+            }
         })
         .detach();
     }

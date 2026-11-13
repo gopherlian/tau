@@ -1068,7 +1068,7 @@ impl DebugDelegate {
                     };
 
                     match path.components().next_back() {
-                        Some(".zed") => {
+                        Some(".zed" | ".tau") => {
                             path.push(RelPath::from_unix_str("debug.json").unwrap());
                         }
                         Some(".vscode") => {

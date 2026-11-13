@@ -61,6 +61,7 @@ github_releases.workspace = true
 globset.workspace = true
 gpui.workspace = true
 http_client.workspace = true
+idea_import.workspace = true
 image.workspace = true
 indexmap.workspace = true
 itertools.workspace = true
