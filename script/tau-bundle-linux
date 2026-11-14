@@ -5,7 +5,8 @@ set -euo pipefail
 help_info() {
   echo "
 Usage: ${0##*/} [options]
-Build a Tau release package for Linux from a tagged release branch.
+Build a Tau release package for Linux from a release branch whose HEAD has an
+annotated tau-vMAJOR.MINOR.PATCH tag.
 
 Wraps script/bundle-linux and writes target/release/tau-<version>-linux-<arch>.tar.gz
 and its .sha256 file. See docs/tau/versioning.md.
@@ -37,28 +38,55 @@ if [[ "$channel" != "stable" ]]; then
     exit 1
 fi
 
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-    echo "The working tree has uncommitted changes; release packages are built from a clean tag." >&2
+# Untracked files count too: the assets crate embeds whole folders, so a stray
+# file would ship in the package.
+if [[ -n "$(git status --porcelain)" ]]; then
+    echo "The working tree has uncommitted changes or untracked files; release packages are built from a clean tag:" >&2
+    git status --short >&2
     exit 1
 fi
 
-# Without --tags, git describe only matches annotated tags, which the release process requires.
-if ! tag=$(git describe --exact-match HEAD 2>/dev/null); then
-    echo "HEAD has no annotated tag; tag the release first, for example: git tag -a v0.1.0 -m \"Tau 0.1.0\"" >&2
+# Tau's tags start with tau-v because Zed's own v-prefixed tags would collide
+# with Tau's versions. Lightweight tags are ignored: a release tag is annotated.
+tag_refs=$(git for-each-ref --points-at HEAD --format='%(objecttype) %(refname:short)' 'refs/tags/tau-v*')
+release_tags=()
+while read -r object_type name; do
+    if [[ "$object_type" == "tag" ]]; then
+        release_tags+=("$name")
+    fi
+done <<< "$tag_refs"
+if [[ ${#release_tags[@]} -eq 0 ]]; then
+    echo "HEAD has no annotated tau-v tag; tag the release first, for example: git tag -a tau-v0.1.0 -m \"Tau 0.1.0\"" >&2
     exit 1
 fi
-if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
-    echo "Tag '$tag' is not a vMAJOR.MINOR.PATCH semantic version tag." >&2
+if [[ ${#release_tags[@]} -gt 1 ]]; then
+    echo "HEAD has several release tags (${release_tags[*]}); keep only the one being released." >&2
     exit 1
 fi
-version="${BASH_REMATCH[1]}"
+tag="${release_tags[0]}"
+
+numeric='(0|[1-9][0-9]*)'
+pre_release_identifier='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+semantic_version="^${numeric}\.${numeric}\.${numeric}(-${pre_release_identifier}(\.${pre_release_identifier})*)?$"
+version="${tag#tau-v}"
+if [[ ! "$version" =~ $semantic_version ]]; then
+    echo "Tag '$tag' is not a tau-vMAJOR.MINOR.PATCH semantic version tag." >&2
+    exit 1
+fi
 
 # Zed's update server would replace Tau with Zed, so automatic updates are turned
 # off at compile time, the same way Linux distributions package Zed.
 export ZED_UPDATE_EXPLANATION="Tau does not update itself yet. Download new versions from https://github.com/gopherlian/tau/releases"
 # Official Zed builds link the remote server against musl, which needs musl-gcc.
 # A glibc remote server is enough here: Tau's client downloads Zed's remote server.
-export REMOTE_SERVER_TARGET="${REMOTE_SERVER_TARGET:-$(rustc -vV | sed -n 's/^host: //p')}"
+if [[ -z "${REMOTE_SERVER_TARGET:-}" ]]; then
+    REMOTE_SERVER_TARGET=$(rustc -vV | sed -n 's/^host: //p')
+    if [[ -z "$REMOTE_SERVER_TARGET" ]]; then
+        echo "rustc -vV did not report a host target." >&2
+        exit 1
+    fi
+fi
+export REMOTE_SERVER_TARGET
 
 script/bundle-linux --skip-sentry
 

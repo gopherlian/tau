@@ -1,9 +1,9 @@
 # Versioning and releases
 
 Tau follows [Semantic Versioning 2.0.0](https://semver.org/). Every release is
-a `MAJOR.MINOR.PATCH` version, tagged `vMAJOR.MINOR.PATCH` and listed in the
-[changelog](../../CHANGELOG.md). Tau's version is independent of the Zed version
-it is based on.
+a `MAJOR.MINOR.PATCH` version, tagged `tau-vMAJOR.MINOR.PATCH` and listed in
+the [changelog](../../CHANGELOG.md). Tau's version is independent of the Zed
+version it is based on.
 
 ## Which number changes
 
@@ -52,11 +52,21 @@ based on, in the changelog and in the release notes.
 
 ## Branches and tags
 
-| Name                  | Purpose                                                                                                                    |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `main`                | Development. `crates/zed/RELEASE_CHANNEL` stays `dev`.                                                                     |
-| `release/MAJOR.MINOR` | Cut from `main` for each minor release. Its first commit sets `RELEASE_CHANNEL` to `stable`. Patch releases are made here. |
-| `vMAJOR.MINOR.PATCH`  | Annotated tag on the release branch.                                                                                       |
+| Name                     | Purpose                                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `main`                   | Development. `crates/zed/RELEASE_CHANNEL` stays `dev`.                                                                     |
+| `release/MAJOR.MINOR`    | Cut from `main` for each minor release. Its first commit sets `RELEASE_CHANNEL` to `stable`. Patch releases are made here. |
+| `tau-vMAJOR.MINOR.PATCH` | Annotated tag on the release branch.                                                                                       |
+
+Tags start with `tau-v` because Zed's own tags (`v0.2.1`, `v1.28.1` and so on)
+would collide with Tau's versions. The `upstream` remote therefore fetches only
+`main` and no tags:
+
+```sh
+git remote add upstream https://github.com/zed-industries/zed.git
+git config remote.upstream.fetch '+refs/heads/main:refs/remotes/upstream/main'
+git config remote.upstream.tagOpt --no-tags
+```
 
 Upstream Zed is brought into `main` with a merge, never a rebase, because
 `main` is published.
@@ -75,8 +85,8 @@ or Security, with the pull request or issue number.
 2. Create the release branch from `main` (`git switch -c release/0.2 main`) and
    commit `stable` into `crates/zed/RELEASE_CHANNEL`. For a patch release,
    reuse the existing branch.
-3. Tag and push: `git tag -a v0.2.0 -m "Tau 0.2.0"`, then push the branch and
-   the tag.
+3. Tag and push: `git tag -a tau-v0.2.0 -m "Tau 0.2.0"`, then push the branch
+   and the tag.
 4. Build the Linux package from the tag: `script/tau-bundle-linux`. It writes
    `target/release/tau-0.2.0-linux-x86_64.tar.gz` and its `.sha256` file.
 5. Unpack the archive and launch `bin/zed` to check that the app starts.

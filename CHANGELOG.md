@@ -39,5 +39,5 @@ repository. Based on Zed 1.30.0 (upstream commit `48741fd17d`).
 - The Linux package needs glibc 2.39 or newer; only AlmaLinux 10 is verified.
 - No Windows or macOS packages yet.
 
-[Unreleased]: https://github.com/gopherlian/tau/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/gopherlian/tau/releases/tag/v0.1.0
+[Unreleased]: https://github.com/gopherlian/tau/compare/tau-v0.1.0...HEAD
+[0.1.0]: https://github.com/gopherlian/tau/releases/tag/tau-v0.1.0
