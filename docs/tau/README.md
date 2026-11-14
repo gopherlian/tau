@@ -1,9 +1,10 @@
 # Tau
 
-Tau is a fork of [Zed](https://zed.dev) built to replace the JetBrains IDEs
-(GoLand, PyCharm and IntelliJ IDEA) with an open-source editor. It adds
-IntelliJ-style debugging, a WSL-aware terminal and parallel agent management,
-and reads JetBrains `.idea` projects without ever modifying them.
+Tau is a fork of [Zed](https://zed.dev) that aims to replace the JetBrains
+IDEs (GoLand, PyCharm and IntelliJ IDEA) with an open-source editor. It reads
+JetBrains `.idea` projects without ever modifying them. IntelliJ-style
+debugging, a WSL-aware terminal and parallel agent management are on the
+[roadmap](#roadmap).
 
 This folder holds Tau's own documentation. Zed's user documentation stays in
 [`docs/src`](../src) and is not changed by the fork.
@@ -31,6 +32,7 @@ Python, Java and Kotlin. Heavy daily use of terminal AI agents.
 | 2026-11-13 | The `.idea` importer is the first prototype: it is new code with no prior art, it can be tested in isolation, and it produces the debug configurations the debugger work will use. |
 | 2026-11-13 | Tau documentation lives in `docs/tau/`, outside Zed's mdBook, so the repository's Prettier check covers it and upstream merges do not conflict.                                    |
 | 2026-11-13 | The `.idea` twin lives in the project, in `.tau/`, with a `.gitignore` containing `*`; once created it belongs to the user and is never overwritten.                               |
+| 2026-11-13 | Tau follows Semantic Versioning, starting at `0.1.0` (initial development), independently of the Zed version it is based on. See [Versioning and releases](versioning.md).         |
 
 ## Why Zed
 
@@ -64,6 +66,8 @@ and [Landscape inventory](research/02-landscape-inventory.md).
   hooks into existing code over broad edits to upstream files.
 - Tau's changes and features are tracked in
   [GitHub Issues](https://github.com/gopherlian/tau/issues).
+- Releases follow [Versioning and releases](versioning.md); changes are listed
+  in the [changelog](../../CHANGELOG.md).
 
 ## Roadmap
 
@@ -85,6 +89,8 @@ and [Landscape inventory](research/02-landscape-inventory.md).
    [Terminal and agents](research/04-terminal-and-agents.md).
 6. Agent management: build on Zed's Threads Sidebar and ACP rather than from
    scratch.
+7. Remote server: build and ship Tau's own remote server, so that SSH and WSL
+   projects work without downloading Zed's. Planned for 0.2.0.
 
 ## Research
 
