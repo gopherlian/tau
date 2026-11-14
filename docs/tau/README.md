@@ -1,9 +1,10 @@
 # Tau
 
-Tau is a fork of [Zed](https://zed.dev) built to replace the JetBrains IDEs
-(GoLand, PyCharm and IntelliJ IDEA) with an open-source editor. It adds
-IntelliJ-style debugging, a WSL-aware terminal and parallel agent management,
-and reads JetBrains `.idea` projects without ever modifying them.
+Tau is a fork of [Zed](https://zed.dev) that aims to replace the JetBrains
+IDEs (GoLand, PyCharm and IntelliJ IDEA) with an open-source editor. It reads
+JetBrains `.idea` projects without ever modifying them. IntelliJ-style
+debugging, a WSL-aware terminal and parallel agent management are on the
+[roadmap](#roadmap).
 
 This folder holds Tau's own documentation. Zed's user documentation stays in
 [`docs/src`](../src) and is not changed by the fork.
