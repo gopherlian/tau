@@ -88,6 +88,8 @@ and [Landscape inventory](research/02-landscape-inventory.md).
    [Terminal and agents](research/04-terminal-and-agents.md).
 6. Agent management: build on Zed's Threads Sidebar and ACP rather than from
    scratch.
+7. Remote server: build and ship Tau's own remote server, so that SSH and WSL
+   projects work without downloading Zed's. Planned for 0.2.0.
 
 ## Research
 

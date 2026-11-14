@@ -10,8 +10,11 @@ version it is based on.
 | Part  | Changes when                                                                                                    |
 | ----- | --------------------------------------------------------------------------------------------------------------- |
 | MAJOR | A release breaks something users rely on, such as a settings or `.tau` format, a command, or a removed feature. |
-| MINOR | A release adds features without breaking anything, including bringing in a new Zed release from upstream.       |
+| MINOR | A release adds features without breaking anything.                                                              |
 | PATCH | A release only fixes bugs, without breaking anything.                                                           |
+
+Bringing in a new Zed release from upstream is a MINOR change, or a MAJOR one
+when Zed breaks something users rely on, such as a setting or a keybinding.
 
 Pre-releases add a suffix, such as `0.2.0-rc.1`, and are marked as pre-releases
 on GitHub.
@@ -23,9 +26,10 @@ development. Anything MAY change at any time." Tau starts there, at `0.1.0`:
 the work released in it (the documentation, the app icon and the `.idea`
 import) prepares the repository.
 
-While Tau is at `0.y.z`, each release raises MINOR, also for breaking changes,
-and PATCH is for fixes only. Moving to `1.0.0` is a deliberate decision, taken
-when Tau's behaviour is stable enough to depend on.
+While Tau is at `0.y.z`, a release that adds features or breaks something
+raises MINOR, and a release that only fixes bugs raises PATCH. Moving to
+`1.0.0` is a deliberate decision, taken when Tau's behaviour is stable enough
+to depend on.
 
 ## What the public API is
 
@@ -40,12 +44,8 @@ what users and their projects depend on:
 ## The Zed base version
 
 The app still reports the Zed version it is built from (`version` in
-`crates/zed/Cargo.toml`), for two reasons:
-
-- In the stable and preview channels, Zed downloads its remote server (SSH, WSL)
-  from zed.dev by that version.
-- Zed raises that line every week, so changing it would conflict with every
-  upstream merge.
+`crates/zed/Cargo.toml`), because Zed raises that line every week and changing
+it would conflict with every upstream merge.
 
 Each Tau release therefore records the Zed version and upstream commit it is
 based on, in the changelog and in the release notes.
@@ -69,14 +69,16 @@ git config remote.upstream.tagOpt --no-tags
 ```
 
 Upstream Zed is brought into `main` with a merge, never a rebase, because
-`main` is published.
+`main` is published. A fix for a patch release lands on `main` first and is
+then cherry-picked onto the release branch with `git cherry-pick -x`.
 
 ## Changelog
 
 [`CHANGELOG.md`](../../CHANGELOG.md) follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Changes go under
-`Unreleased` as they land on `main`, grouped as Added, Changed, Fixed, Removed
-or Security, with the pull request or issue number.
+`Unreleased` as they land on `main`, grouped as Added, Changed, Deprecated,
+Removed, Fixed or Security, with the pull request or issue number. A release
+can also list Known limitations, a group Tau adds to Keep a Changelog's.
 
 ## Cutting a release
 
@@ -89,7 +91,8 @@ or Security, with the pull request or issue number.
    and the tag.
 4. Build the Linux package from the tag: `script/tau-bundle-linux`. It writes
    `target/release/tau-0.2.0-linux-x86_64.tar.gz` and its `.sha256` file.
-5. Unpack the archive and launch `bin/zed` to check that the app starts.
+5. Unpack the archive and launch `zed.app/bin/zed` to check that the app
+   starts.
 6. Create the GitHub release from the tag, with the changelog section as notes,
    and attach the archive and its checksum.
 
@@ -99,11 +102,17 @@ or Security, with the pull request or issue number.
   `ZED_UPDATE_EXPLANATION`, because Zed's update server would replace Tau with
   Zed. Download new versions from
   [GitHub Releases](https://github.com/gopherlian/tau/releases).
-- The app still calls itself Zed and uses Zed's folders (`~/.config/zed`,
-  `~/.local/share/zed`), so it shares settings and data with an installed Zed.
-- In remote projects (SSH, WSL), the stable build downloads Zed's official
-  remote server, so Tau features that run on the remote side, such as the
-  `.idea` import, are not available there.
-- The Linux package is built on AlmaLinux 10 and needs glibc 2.39 or newer.
-  Other distributions are not verified yet.
+- The app still calls itself Zed, also in the Check for Updates message, and
+  uses Zed's folders (`~/.config/zed`, `~/.local/share/zed`), so it shares
+  settings and data with an installed Zed. On Linux it also shares Zed's
+  single-instance socket: while Zed's stable build is running, `zed.app/bin/zed`
+  opens files in that Zed instead of starting Tau.
+- Remote development (SSH, WSL) does not work. For a remote project, the app
+  downloads Zed's remote server for its Zed base version from zed.dev, and Zed
+  publishes remote servers only for its own releases, not for the development
+  version Tau 0.1.0 is based on. Tau 0.2.0 is planned to ship its own remote
+  server.
+- The Linux package is built on AlmaLinux 10 and needs glibc 2.39 or newer and
+  the system's ALSA library (`alsa-lib` or `libasound2`). Other distributions
+  are not verified yet.
 - Windows and macOS packages are not built yet.

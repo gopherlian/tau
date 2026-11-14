@@ -36,7 +36,10 @@ repository. Based on Zed 1.30.0 (upstream commit `48741fd17d`).
 
 - Automatic updates are off: download new versions from GitHub Releases.
 - The app still calls itself Zed and shares Zed's settings and data folders.
-- The Linux package needs glibc 2.39 or newer; only AlmaLinux 10 is verified.
+- Remote development (SSH, WSL) does not work: Zed has not published a remote
+  server for this base version. Tau 0.2.0 is planned to ship its own.
+- The Linux package needs glibc 2.39 or newer and the system's ALSA library;
+  only AlmaLinux 10 is verified.
 - No Windows or macOS packages yet.
 
 [Unreleased]: https://github.com/gopherlian/tau/compare/tau-v0.1.0...HEAD

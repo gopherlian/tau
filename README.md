@@ -7,10 +7,11 @@
 
 # Tau
 
-Tau is a fork of [Zed](https://zed.dev) built to replace the JetBrains IDEs
-(GoLand, PyCharm and IntelliJ IDEA) with an open-source editor. It adds
-IntelliJ-style debugging, a WSL-aware terminal and parallel agent management,
-and reads JetBrains `.idea` projects without ever modifying them.
+Tau is a fork of [Zed](https://zed.dev) that aims to replace the JetBrains
+IDEs (GoLand, PyCharm and IntelliJ IDEA) with an open-source editor. It reads
+JetBrains `.idea` projects without ever modifying them. IntelliJ-style
+debugging, a WSL-aware terminal and parallel agent management are on the
+[roadmap](docs/tau/README.md#roadmap).
 
 Tau is an independent project. It is not affiliated with or endorsed by Zed
 Industries.
@@ -32,8 +33,11 @@ Available today:
 
 Linux: download `tau-<version>-linux-x86_64.tar.gz` from
 [GitHub Releases](https://github.com/gopherlian/tau/releases), unpack it and run
-`bin/zed`. It needs glibc 2.39 or newer. Automatic updates are off, so new
-versions come from the releases page. Windows and macOS: build from source.
+`zed.app/bin/zed`. It needs glibc 2.39 or newer and the system's ALSA library
+(`alsa-lib` or `libasound2`). Automatic updates are off, so new versions come
+from the releases page. Remote development (SSH, WSL) does not work yet; see
+[Limitations](docs/tau/versioning.md#limitations-of-tau-builds). Windows and
+macOS: build from source.
 
 ## Documentation
 
