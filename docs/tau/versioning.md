@@ -112,7 +112,8 @@ can also list Known limitations, a group Tau adds to Keep a Changelog's.
   publishes remote servers only for its own releases, not for the development
   version Tau 0.1.0 is based on. Tau 0.2.0 is planned to ship its own remote
   server.
-- The Linux package is built on AlmaLinux 10 and needs glibc 2.39 or newer and
-  the system's ALSA library (`alsa-lib` or `libasound2`). Other distributions
-  are not verified yet.
+- The Linux package is built on AlmaLinux 10 with libraries from Homebrew and
+  is verified only on that machine. It needs glibc 2.39 or newer, looks for
+  libraries in `/home/linuxbrew/.linuxbrew/lib` before its own, and may not
+  start on a machine without Homebrew. Portable packages come later.
 - Windows and macOS packages are not built yet.
