@@ -40,6 +40,17 @@ pub static RELEASE_CHANNEL: LazyLock<ReleaseChannel> =
         _ => panic!("invalid release channel {}", *RELEASE_CHANNEL_NAME),
     });
 
+/// Tau's own version, independent of the Zed version in [`AppVersion`].
+///
+/// Release builds compile it in from their `tau-vMAJOR.MINOR.PATCH` tag through
+/// the `TAU_VERSION` environment variable. Builds without that variable, such
+/// as development builds, have none.
+pub static TAU_VERSION: LazyLock<Option<Version>> = LazyLock::new(|| {
+    // The build script rejects a TAU_VERSION that is not a semantic version,
+    // so parsing cannot fail here.
+    option_env!("TAU_VERSION").and_then(|version| version.parse().ok())
+});
+
 /// The app identifier for the current release channel, Windows only.
 #[cfg(target_os = "windows")]
 pub fn app_identifier() -> &'static str {
@@ -282,7 +293,18 @@ impl FromStr for ReleaseChannel {
 
 #[cfg(test)]
 mod tests {
-    use super::ReleaseChannel;
+    use super::{ReleaseChannel, TAU_VERSION};
+    use semver::Version;
+
+    // Cargo passes the build's environment on to the test binary, so the
+    // runtime TAU_VERSION is the one the build compiled in.
+    #[test]
+    fn test_tau_version_is_the_one_given_to_the_build() {
+        let expected = std::env::var("TAU_VERSION")
+            .ok()
+            .map(|version| version.parse::<Version>().unwrap());
+        assert_eq!(*TAU_VERSION, expected);
+    }
 
     #[test]
     fn test_docs_url_for_release_channel() {

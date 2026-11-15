@@ -50,6 +50,12 @@ it would conflict with every upstream merge.
 Each Tau release therefore records the Zed version and upstream commit it is
 based on, in the changelog and in the release notes.
 
+Release builds also compile in Tau's own version. `script/tau-bundle-linux`
+takes it from the `tau-v` tag and passes it to the build as `TAU_VERSION`, and
+the build fails if it is not a semantic version. To build a release another
+way, for example on Windows, set `TAU_VERSION` to the tag's version, such as
+`0.2.0`. Builds without it, such as development builds, have no Tau version.
+
 ## Branches and tags
 
 | Name                     | Purpose                                                                                                                    |
