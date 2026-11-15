@@ -2,14 +2,17 @@ use crate::{
     RemoteArch, RemoteClientDelegate, RemoteOs, RemotePlatform,
     command::{RemoteCommand, home_stdio_launcher_command},
     remote_client::{CommandTemplate, Interactive, RemoteConnection, RemoteConnectionOptions},
-    transport::{HOME_DIR_ARGS, HOME_DIR_PROGRAM, parse_home_dir, parse_platform, parse_shell},
+    transport::{
+        HOME_DIR_ARGS, HOME_DIR_PROGRAM, parse_home_dir, parse_platform, parse_shell,
+        remote_server_binary_name, remote_server_version,
+    },
 };
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use collections::HashMap;
 use futures::channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
 use gpui::{App, AppContext as _, AsyncApp, Task};
-use release_channel::{AppVersion, ReleaseChannel};
+use release_channel::{AppVersion, ReleaseChannel, TAU_VERSION};
 use rpc::proto::Envelope;
 use semver::Version;
 use smol::{
@@ -73,8 +76,15 @@ impl WslRemoteConnection {
             connection_options.distro_name,
             connection_options.user
         );
-        let (release_channel, version) =
-            cx.update(|cx| (ReleaseChannel::global(cx), AppVersion::global(cx)));
+        let (release_channel, version) = cx.update(|cx| {
+            let release_channel = ReleaseChannel::global(cx);
+            remote_server_version(
+                release_channel,
+                TAU_VERSION.clone(),
+                AppVersion::global(cx),
+            )
+            .map(|version| (release_channel, version))
+        })?;
 
         let mut this = Self {
             connection_options,
@@ -224,11 +234,7 @@ impl WslRemoteConnection {
             _ => version.to_string(),
         };
 
-        let binary_name = format!(
-            "zed-remote-server-{}-{}",
-            release_channel.dev_name(),
-            version_str
-        );
+        let binary_name = remote_server_binary_name(release_channel, &version_str);
 
         let dst_path =
             paths::remote_server_dir_relative().join(RelPath::from_unix_str(&binary_name).unwrap());
@@ -276,7 +282,7 @@ impl WslRemoteConnection {
 
         let wanted_version = match release_channel {
             ReleaseChannel::Nightly | ReleaseChannel::Dev => None,
-            _ => Some(cx.update(|cx| AppVersion::global(cx))),
+            _ => Some(version.clone()),
         };
 
         let src_path = delegate

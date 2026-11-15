@@ -72,6 +72,11 @@ pub fn remote_server_dir_relative() -> &'static RelPath {
     *CACHED
 }
 
+/// The file name prefix of the remote server binaries in [`remote_server_dir_relative`].
+///
+/// Zed's servers share that directory, so Tau's carry their own prefix.
+pub const REMOTE_SERVER_BINARY_PREFIX: &str = "tau-remote-server";
+
 // Remove this once 223 goes stable
 /// Returns the relative path to the zed_wsl_server directory on the wsl host.
 pub fn remote_wsl_server_dir_relative() -> &'static RelPath {
