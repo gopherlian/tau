@@ -108,6 +108,8 @@ if [[ ! -f "$bundle" ]]; then
     echo "script/bundle-linux did not produce ${bundle}." >&2
     exit 1
 fi
+# script/tau-build-remote-server always writes here, whatever CARGO_TARGET_DIR is,
+# because its cargo target directory lives inside the container.
 server_dir="target/tau-remote-server"
 server_asset="tau-remote-server-linux-${arch}.gz"
 if [[ ! -f "${server_dir}/${server_asset}" ]]; then
@@ -117,8 +119,11 @@ fi
 
 # The package carries the remote server for its own architecture, where the
 # editor looks for it next to zed-editor, so remote development to hosts of that
-# architecture needs no download.
-staging_dir=$(mktemp -d)
+# architecture needs no download. The server is appended to the finished archive
+# so that script/bundle-linux, which comes from Zed, stays unchanged. The staging
+# directory is under the target directory because /tmp may be too small for the
+# uncompressed package.
+staging_dir=$(mktemp -d -p "$target_dir")
 trap 'rm -rf "$staging_dir"' EXIT
 mkdir -p "${staging_dir}/zed.app/libexec"
 cp "${server_dir}/${server_asset}" "${staging_dir}/zed.app/libexec/"
@@ -129,7 +134,6 @@ rm "$bundle"
 (cd "${target_dir}/release" && sha256sum "${archive}" > "${archive}.sha256")
 cp "${server_dir}/${server_asset}" "${server_dir}/${server_asset}.sha256" "${target_dir}/release/"
 
-echo "Built the release assets in ${target_dir}/release:"
+echo "Built the release assets in ${target_dir}/release, each with a .sha256 file:"
 echo "  ${archive}"
 echo "  ${server_asset}"
-echo "and their .sha256 files."
