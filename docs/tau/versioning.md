@@ -95,12 +95,20 @@ can also list Known limitations, a group Tau adds to Keep a Changelog's.
    reuse the existing branch.
 3. Tag and push: `git tag -a tau-v0.2.0 -m "Tau 0.2.0"`, then push the branch
    and the tag.
-4. Build the Linux package from the tag: `script/tau-bundle-linux`. It writes
-   `target/release/tau-0.2.0-linux-x86_64.tar.gz` and its `.sha256` file.
+4. Build the Linux package from the tag: `script/tau-bundle-linux`. It needs
+   Docker, because it builds Tau's remote server with
+   `script/tau-build-remote-server` as a static musl binary that runs on any
+   Linux host. It writes to `target/release`:
+   - `tau-0.2.0-linux-x86_64.tar.gz`, the package, which carries the x86_64
+     remote server in `zed.app/libexec`;
+   - `tau-remote-server-linux-x86_64.gz`, the remote server;
+   - a `.sha256` file for each.
 5. Unpack the archive and launch `zed.app/bin/zed` to check that the app
    starts.
 6. Create the GitHub release from the tag, with the changelog section as notes,
-   and attach the archive and its checksum.
+   and attach the four files. Keep their names: the app downloads a remote
+   server it does not carry from the release whose tag matches its version, and
+   installs it only if it matches its `.sha256` file.
 
 ## Limitations of Tau builds
 
@@ -113,11 +121,12 @@ can also list Known limitations, a group Tau adds to Keep a Changelog's.
   settings and data with an installed Zed. On Linux it also shares Zed's
   single-instance socket: while Zed's stable build is running, `zed.app/bin/zed`
   opens files in that Zed instead of starting Tau.
-- Remote development (SSH, WSL) does not work. For a remote project, the app
-  downloads Zed's remote server for its Zed base version from zed.dev, and Zed
-  publishes remote servers only for its own releases, not for the development
-  version Tau 0.1.0 is based on. Tau 0.2.0 is planned to ship its own remote
-  server.
+- Remote development (SSH, WSL, dev containers) works only with Linux hosts,
+  because Tau builds its remote server only for Linux. The package carries the
+  x86_64 server; for another architecture the app downloads the server from
+  Tau's release, which has none for that architecture yet. On the remote host
+  the server is `~/.zed_server/tau-remote-server-stable-<version>`, next to any
+  of Zed's.
 - The Linux package is built on AlmaLinux 10 with libraries from Homebrew and
   is verified only on that machine. It needs glibc 2.39 or newer, looks for
   libraries in `/home/linuxbrew/.linuxbrew/lib` before its own, and may not

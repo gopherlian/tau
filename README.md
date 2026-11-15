@@ -35,8 +35,8 @@ Linux: download `tau-<version>-linux-x86_64.tar.gz` from
 [GitHub Releases](https://github.com/gopherlian/tau/releases), unpack it and run
 `zed.app/bin/zed`. The package is verified only on AlmaLinux 10 with Homebrew,
 where it is built, and needs glibc 2.39 or newer. Automatic updates are off, so
-new versions come from the releases page. Remote development (SSH, WSL) does
-not work yet; see
+new versions come from the releases page. Remote development (SSH, WSL, dev
+containers) works with x86_64 Linux hosts; see
 [Limitations](docs/tau/versioning.md#limitations-of-tau-builds). Windows and
 macOS: build from source.
 
