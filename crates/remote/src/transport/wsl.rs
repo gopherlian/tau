@@ -78,12 +78,8 @@ impl WslRemoteConnection {
         );
         let (release_channel, version) = cx.update(|cx| {
             let release_channel = ReleaseChannel::global(cx);
-            remote_server_version(
-                release_channel,
-                TAU_VERSION.clone(),
-                AppVersion::global(cx),
-            )
-            .map(|version| (release_channel, version))
+            remote_server_version(release_channel, TAU_VERSION.clone(), AppVersion::global(cx))
+                .map(|version| (release_channel, version))
         })?;
 
         let mut this = Self {

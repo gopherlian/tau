@@ -64,8 +64,7 @@ pub(crate) async fn remote_server_path(
     download_verified(http_client, &url, &path).await?;
 
     if let Err(error) =
-        super::cleanup_remote_server_cache(cache_dir, &path, super::REMOTE_SERVER_CACHE_LIMIT)
-            .await
+        super::cleanup_remote_server_cache(cache_dir, &path, super::REMOTE_SERVER_CACHE_LIMIT).await
     {
         log::warn!("Failed to clean up remote server cache in {cache_dir:?}: {error:#}");
     }
@@ -158,18 +157,28 @@ mod tests {
     const ASSET_URL: &str = "https://github.com/gopherlian/tau/releases/download/tau-v0.2.0/tau-remote-server-linux-aarch64.gz";
 
     fn release_server(checksum: String, requests: Arc<AtomicUsize>) -> Arc<dyn HttpClient> {
+        release_server_with_checksum_file(
+            Some(format!("{checksum}  tau-remote-server-linux-aarch64.gz\n")),
+            requests,
+        )
+    }
+
+    fn release_server_with_checksum_file(
+        checksum_file: Option<String>,
+        requests: Arc<AtomicUsize>,
+    ) -> Arc<dyn HttpClient> {
         FakeHttpClient::create(move |request| {
-            let checksum = checksum.clone();
+            let checksum_file = checksum_file.clone();
             let requests = requests.clone();
             async move {
                 requests.fetch_add(1, Ordering::SeqCst);
                 let url = request.uri().to_string();
                 if url == ASSET_URL {
                     Ok(Response::builder().status(200).body(SERVER.into())?)
-                } else if url == format!("{ASSET_URL}.sha256") {
-                    Ok(Response::builder()
-                        .status(200)
-                        .body(format!("{checksum}  tau-remote-server-linux-aarch64.gz\n").into())?)
+                } else if let Some(checksum_file) = checksum_file
+                    && url == format!("{ASSET_URL}.sha256")
+                {
+                    Ok(Response::builder().status(200).body(checksum_file.into())?)
                 } else {
                     Ok(Response::builder().status(404).body("".into())?)
                 }
@@ -183,14 +192,19 @@ mod tests {
 
     #[test]
     fn test_asset_url_points_at_tau_releases() {
-        assert_eq!(asset_url(&Version::new(0, 2, 0), "linux", "aarch64"), ASSET_URL);
+        assert_eq!(
+            asset_url(&Version::new(0, 2, 0), "linux", "aarch64"),
+            ASSET_URL
+        );
     }
 
     #[test]
     fn test_bundled_server_is_used_without_downloading() {
         let executable_dir = tempfile::tempdir().unwrap();
         let cache_dir = tempfile::tempdir().unwrap();
-        let bundled = executable_dir.path().join("tau-remote-server-linux-x86_64.gz");
+        let bundled = executable_dir
+            .path()
+            .join("tau-remote-server-linux-x86_64.gz");
         std::fs::write(&bundled, SERVER).unwrap();
         let requests = Arc::new(AtomicUsize::new(0));
 
@@ -249,6 +263,34 @@ mod tests {
 
         assert!(error.to_string().contains("SHA-256"), "{error}");
         assert_eq!(std::fs::read_dir(cache_dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn test_missing_or_malformed_checksum_file_is_rejected() {
+        for (checksum_file, message) in [
+            (None, "404"),
+            (
+                Some("not a checksum\n".to_string()),
+                "does not start with a SHA-256",
+            ),
+        ] {
+            let cache_dir = tempfile::tempdir().unwrap();
+            let requests = Arc::new(AtomicUsize::new(0));
+
+            let error = smol::block_on(remote_server_path(
+                release_server_with_checksum_file(checksum_file, requests.clone()),
+                Some(Version::new(0, 2, 0)),
+                "linux",
+                "aarch64",
+                None,
+                cache_dir.path(),
+            ))
+            .unwrap_err();
+
+            assert!(format!("{error:#}").contains(message), "{error:#}");
+            assert_eq!(requests.load(Ordering::SeqCst), 1);
+            assert_eq!(std::fs::read_dir(cache_dir.path()).unwrap().count(), 0);
+        }
     }
 
     #[test]
