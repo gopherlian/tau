@@ -8,6 +8,16 @@ and Tau follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). See
 
 ## [Unreleased]
 
+### Added
+
+- Tau's own remote server, so remote development over SSH, WSL and dev
+  containers works with x86_64 Linux hosts. The package carries the server, and
+  the app no longer looks for Zed's remote server on zed.dev. A server the app
+  downloads from Tau's releases is installed only if its SHA-256 matches the one
+  published with it ([#16](https://github.com/gopherlian/tau/issues/16)).
+- `script/tau-build-remote-server`, which builds the remote server as a static
+  musl binary in Docker ([#16](https://github.com/gopherlian/tau/issues/16)).
+
 ## [0.1.0] - 2026-11-14
 
 First release of Tau. It is initial development: this version prepares the

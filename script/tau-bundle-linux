@@ -9,7 +9,11 @@ Build a Tau release package for Linux from a release branch whose HEAD has an
 annotated tau-vMAJOR.MINOR.PATCH tag.
 
 Wraps script/bundle-linux, compiles the tag's version into the app as TAU_VERSION,
-and writes target/release/tau-<version>-linux-<arch>.tar.gz and its .sha256 file.
+and builds Tau's remote server with script/tau-build-remote-server, which needs
+Docker. Writes these release assets to target/release, each with a .sha256 file:
+  tau-<version>-linux-<arch>.tar.gz   the package, with the remote server for
+                                      <arch> in zed.app/libexec
+  tau-remote-server-linux-<arch>.gz   the remote server
 See docs/tau/versioning.md.
 
 Options:
@@ -79,8 +83,9 @@ export TAU_VERSION="$version"
 # Zed's update server would replace Tau with Zed, so automatic updates are turned
 # off at compile time, the same way Linux distributions package Zed.
 export ZED_UPDATE_EXPLANATION="Tau does not update itself yet. Download new versions from https://github.com/gopherlian/tau/releases"
-# Official Zed builds link the remote server against musl, which needs musl-gcc.
-# A glibc remote server is enough here: Tau's client downloads Zed's remote server.
+# script/bundle-linux also builds a remote server, linked against musl unless told
+# otherwise, which needs musl-gcc. Tau ships the one from
+# script/tau-build-remote-server instead, so a glibc build is enough here.
 if [[ -z "${REMOTE_SERVER_TARGET:-}" ]]; then
     REMOTE_SERVER_TARGET=$(rustc -vV | sed -n 's/^host: //p')
     if [[ -z "$REMOTE_SERVER_TARGET" ]]; then
@@ -90,6 +95,9 @@ if [[ -z "${REMOTE_SERVER_TARGET:-}" ]]; then
 fi
 export REMOTE_SERVER_TARGET
 
+# The remote server builds first: it needs Docker, and failing then is cheaper
+# than after the editor build.
+script/tau-build-remote-server
 script/bundle-linux --skip-sentry
 
 target_dir="${CARGO_TARGET_DIR:-target}"
@@ -100,7 +108,32 @@ if [[ ! -f "$bundle" ]]; then
     echo "script/bundle-linux did not produce ${bundle}." >&2
     exit 1
 fi
-mv "$bundle" "${target_dir}/release/${archive}"
-(cd "${target_dir}/release" && sha256sum "${archive}" > "${archive}.sha256")
+# script/tau-build-remote-server always writes here, whatever CARGO_TARGET_DIR is,
+# because its cargo target directory lives inside the container.
+server_dir="target/tau-remote-server"
+server_asset="tau-remote-server-linux-${arch}.gz"
+if [[ ! -f "${server_dir}/${server_asset}" ]]; then
+    echo "script/tau-build-remote-server did not produce ${server_dir}/${server_asset}." >&2
+    exit 1
+fi
 
-echo "Built ${target_dir}/release/${archive}"
+# The package carries the remote server for its own architecture, where the
+# editor looks for it next to zed-editor, so remote development to hosts of that
+# architecture needs no download. The server is appended to the finished archive
+# so that script/bundle-linux, which comes from Zed, stays unchanged. The staging
+# directory is under the target directory because /tmp may be too small for the
+# uncompressed package.
+staging_dir=$(mktemp -d -p "$target_dir")
+trap 'rm -rf "$staging_dir"' EXIT
+mkdir -p "${staging_dir}/zed.app/libexec"
+cp "${server_dir}/${server_asset}" "${staging_dir}/zed.app/libexec/"
+gzip --decompress --stdout "$bundle" > "${staging_dir}/package.tar"
+tar --append --file "${staging_dir}/package.tar" -C "$staging_dir" "zed.app/libexec/${server_asset}"
+gzip --stdout "${staging_dir}/package.tar" > "${target_dir}/release/${archive}"
+rm "$bundle"
+(cd "${target_dir}/release" && sha256sum "${archive}" > "${archive}.sha256")
+cp "${server_dir}/${server_asset}" "${server_dir}/${server_asset}.sha256" "${target_dir}/release/"
+
+echo "Built the release assets in ${target_dir}/release, each with a .sha256 file:"
+echo "  ${archive}"
+echo "  ${server_asset}"

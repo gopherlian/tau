@@ -1462,11 +1462,13 @@ fn cleanup_old_binaries_wsl() {
 
 // Tau's servers are named by Tau's version, which is always lower than the
 // Zed version in ZED_PKG_VERSION, so comparing with that would delete them all.
+// A server built without TAU_VERSION cannot tell which servers are older than
+// itself, so it keeps them all.
 fn is_new_version(version: &str, current_version: Option<&semver::Version>) -> bool {
-    semver::Version::from_str(version)
-        .ok()
-        .zip(current_version)
-        .is_some_and(|(version, current_version)| &version >= current_version)
+    let Some(current_version) = current_version else {
+        return true;
+    };
+    semver::Version::from_str(version).is_ok_and(|version| &version >= current_version)
 }
 
 fn is_file_in_use(file_name: &OsStr) -> bool {
@@ -1498,7 +1500,8 @@ mod tests {
         assert!(is_new_version("0.3.0", Some(&tau_version)));
         assert!(!is_new_version("0.1.0", Some(&tau_version)));
         assert!(!is_new_version("build", Some(&tau_version)));
-        assert!(!is_new_version("0.2.0", None));
+        assert!(is_new_version("0.1.0", None));
+        assert!(is_new_version("0.3.0", None));
     }
 
     #[cfg(unix)]

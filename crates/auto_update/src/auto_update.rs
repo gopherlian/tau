@@ -30,9 +30,9 @@ use std::{
     time::{Duration, SystemTime},
 };
 use util::{ResultExt as _, command::new_command};
+use workspace::Workspace;
 
 mod tau_remote_server;
-use workspace::Workspace;
 
 const SHOULD_SHOW_UPDATE_NOTIFICATION_KEY: &str = "auto-updater-should-show-updated-notification";
 

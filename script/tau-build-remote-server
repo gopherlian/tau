@@ -83,8 +83,11 @@ docker run "${docker_options[@]}" "$image" bash -euo pipefail -c '
 cargo --config .cargo/bundle-config.toml build --release --locked --target "$TARGET" --package remote_server
 binary="/output/target/${TARGET}/release/remote-server"
 
-# A static binary has no program interpreter and needs no shared libraries.
-if readelf --program-headers "$binary" | grep -q INTERP || readelf --dynamic "$binary" | grep -q NEEDED; then
+# A static binary has no program interpreter and needs no shared libraries. The
+# headers are read before grep: grep -q can stop reading early, and pipefail would
+# then turn a match into a failure that skips this check.
+headers=$(readelf --program-headers --dynamic "$binary")
+if grep -q -e INTERP -e NEEDED <<< "$headers"; then
     echo "${binary} is not statically linked:" >&2
     readelf --dynamic "$binary" >&2
     exit 1
