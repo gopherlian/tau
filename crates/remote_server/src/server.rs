@@ -1429,14 +1429,18 @@ fn read_proxy_settings(cx: &mut Context<HeadlessProject>) -> Option<Url> {
 fn cleanup_old_binaries() -> Result<()> {
     let server_dir = paths::remote_server_dir_relative();
     let release_channel = release_channel::RELEASE_CHANNEL.dev_name();
-    let prefix = format!("zed-remote-server-{}-", release_channel);
+    let prefix = format!(
+        "{}-{}-",
+        paths::REMOTE_SERVER_BINARY_PREFIX,
+        release_channel
+    );
 
     for entry in std::fs::read_dir(server_dir.as_std_path())? {
         let path = entry?.path();
 
         if let Some(file_name) = path.file_name()
             && let Some(version) = file_name.to_string_lossy().strip_prefix(&prefix)
-            && !is_new_version(version)
+            && !is_new_version(version, release_channel::TAU_VERSION.as_ref())
             && !is_file_in_use(file_name)
         {
             log::info!("removing old remote server binary: {:?}", path);
@@ -1456,11 +1460,13 @@ fn cleanup_old_binaries_wsl() {
     }
 }
 
-fn is_new_version(version: &str) -> bool {
+// Tau's servers are named by Tau's version, which is always lower than the
+// Zed version in ZED_PKG_VERSION, so comparing with that would delete them all.
+fn is_new_version(version: &str, current_version: Option<&semver::Version>) -> bool {
     semver::Version::from_str(version)
         .ok()
-        .zip(semver::Version::from_str(env!("ZED_PKG_VERSION")).ok())
-        .is_some_and(|(version, current_version)| version >= current_version)
+        .zip(current_version)
+        .is_some_and(|(version, current_version)| &version >= current_version)
 }
 
 fn is_file_in_use(file_name: &OsStr) -> bool {
@@ -1483,6 +1489,17 @@ fn is_file_in_use(file_name: &OsStr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_old_binaries_are_compared_with_tau_version() {
+        let tau_version = semver::Version::new(0, 2, 0);
+
+        assert!(is_new_version("0.2.0", Some(&tau_version)));
+        assert!(is_new_version("0.3.0", Some(&tau_version)));
+        assert!(!is_new_version("0.1.0", Some(&tau_version)));
+        assert!(!is_new_version("build", Some(&tau_version)));
+        assert!(!is_new_version("0.2.0", None));
+    }
 
     #[cfg(unix)]
     mod unix {

@@ -29,7 +29,9 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use util::command::new_command;
+use util::{ResultExt as _, command::new_command};
+
+mod tau_remote_server;
 use workspace::Workspace;
 
 const SHOULD_SHOW_UPDATE_NOTIFICATION_KEY: &str = "auto-updater-should-show-updated-notification";
@@ -596,6 +598,8 @@ impl AutoUpdater {
     // If you are packaging Zed and need to override the place it downloads SSH remotes from,
     // you can override this function. You should also update get_remote_server_release_url to return
     // Ok(None).
+    //
+    // Tau does: its servers come from Tau's releases, see tau_remote_server.rs.
     pub async fn download_remote_server_release(
         release_channel: ReleaseChannel,
         version: Option<Version>,
@@ -610,68 +614,37 @@ impl AutoUpdater {
                 .clone()
                 .context("auto-update not initialized")
         })?;
+        let http_client = this.read_with(cx, |this, _| this.client.http_client());
+        let executable_dir = env::current_exe()
+            .log_err()
+            .and_then(|executable| executable.parent().map(Path::to_path_buf));
+        let cache_dir = remote_servers_dir()
+            .join("tau")
+            .join(release_channel.dev_name())
+            .join(format!("{os}-{arch}"));
 
-        set_status("Fetching remote server release", cx);
-        let release = Self::get_release_asset(
-            &this,
-            release_channel,
+        set_status("Fetching remote server", cx);
+        tau_remote_server::remote_server_path(
+            http_client,
             version,
-            "zed-remote-server",
             os,
             arch,
-            cx,
+            executable_dir.as_deref(),
+            &cache_dir,
         )
-        .await?;
-
-        let servers_dir = paths::remote_servers_dir();
-        let channel_dir = servers_dir.join(release_channel.dev_name());
-        let platform_dir = channel_dir.join(format!("{}-{}", os, arch));
-        let version_path = platform_dir.join(format!("{}.gz", release.version));
-        smol::fs::create_dir_all(&platform_dir).await.ok();
-
-        let client = this.read_with(cx, |this, _| this.client.http_client());
-
-        if smol::fs::metadata(&version_path).await.is_err() {
-            log::info!(
-                "downloading zed-remote-server {os} {arch} version {}",
-                release.version
-            );
-            set_status("Downloading remote server", cx);
-            download_remote_server_binary(&version_path, release, client).await?;
-        }
-
-        if let Err(error) =
-            cleanup_remote_server_cache(&platform_dir, &version_path, REMOTE_SERVER_CACHE_LIMIT)
-                .await
-        {
-            log::warn!(
-                "Failed to clean up remote server cache in {:?}: {error:#}",
-                platform_dir
-            );
-        }
-
-        Ok(version_path)
+        .await
     }
 
+    // Tau checks the server's SHA-256 on this machine before uploading it, so
+    // remote hosts never download it themselves.
     pub async fn get_remote_server_release_url(
-        channel: ReleaseChannel,
-        version: Option<Version>,
-        os: &str,
-        arch: &str,
-        cx: &mut AsyncApp,
+        _channel: ReleaseChannel,
+        _version: Option<Version>,
+        _os: &str,
+        _arch: &str,
+        _cx: &mut AsyncApp,
     ) -> Result<Option<String>> {
-        let this = cx.update(|cx| {
-            cx.default_global::<GlobalAutoUpdate>()
-                .0
-                .clone()
-                .context("auto-update not initialized")
-        })?;
-
-        let release =
-            Self::get_release_asset(&this, channel, version, "zed-remote-server", os, arch, cx)
-                .await?;
-
-        Ok(Some(release.url))
+        Ok(None)
     }
 
     async fn get_release_asset(
@@ -994,26 +967,6 @@ impl AutoUpdater {
             Ok(kvp.read_kvp(SHOULD_SHOW_UPDATE_NOTIFICATION_KEY)?.is_some())
         })
     }
-}
-
-async fn download_remote_server_binary(
-    target_path: &PathBuf,
-    release: ReleaseAsset,
-    client: Arc<HttpClientWithUrl>,
-) -> Result<()> {
-    let temp = tempfile::Builder::new().tempfile_in(remote_servers_dir())?;
-    let mut temp_file = File::create(&temp).await?;
-
-    let mut response = client.get(&release.url, Default::default(), true).await?;
-    anyhow::ensure!(
-        response.status().is_success(),
-        "failed to download remote server release: {:?}",
-        response.status()
-    );
-    smol::io::copy(response.body_mut(), &mut temp_file).await?;
-    smol::fs::rename(&temp, &target_path).await?;
-
-    Ok(())
 }
 
 async fn cleanup_remote_server_cache(

@@ -11,7 +11,9 @@ use futures::{
     channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender},
 };
 use gpui::{AppContext as _, AsyncApp, Task};
+use release_channel::ReleaseChannel;
 use rpc::proto::Envelope;
+use semver::Version;
 use util::command::Child;
 
 pub mod docker;
@@ -551,9 +553,74 @@ async fn which(
     }
 }
 
+/// The version that names the remote server binary and selects its download.
+///
+/// Tau publishes its own remote servers, so they carry Tau's version instead of
+/// the Zed version in `AppVersion`. Development builds build theirs from source.
+pub(crate) fn remote_server_version(
+    release_channel: ReleaseChannel,
+    tau_version: Option<Version>,
+    app_version: Version,
+) -> Result<Version> {
+    match release_channel {
+        ReleaseChannel::Dev => Ok(app_version),
+        ReleaseChannel::Nightly | ReleaseChannel::Preview | ReleaseChannel::Stable => tau_version
+            .context(
+                "This Tau build has no Tau version, so it cannot find a remote server that matches it. \
+                 Release builds get it from script/tau-bundle-linux; when building Tau another way, \
+                 set TAU_VERSION to the release's version, such as 0.2.0.",
+            ),
+    }
+}
+
+pub(crate) fn remote_server_binary_name(release_channel: ReleaseChannel, version: &str) -> String {
+    format!(
+        "{}-{}-{}",
+        paths::REMOTE_SERVER_BINARY_PREFIX,
+        release_channel.dev_name(),
+        version
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_remote_server_is_named_by_tau_version() {
+        let version = remote_server_version(
+            ReleaseChannel::Stable,
+            Some(Version::new(0, 2, 0)),
+            Version::new(1, 30, 0),
+        )
+        .unwrap();
+
+        assert_eq!(version, Version::new(0, 2, 0));
+        assert_eq!(
+            remote_server_binary_name(ReleaseChannel::Stable, &version.to_string()),
+            "tau-remote-server-stable-0.2.0"
+        );
+    }
+
+    #[test]
+    fn test_remote_server_needs_tau_version_outside_dev() {
+        let error = remote_server_version(ReleaseChannel::Stable, None, Version::new(1, 30, 0))
+            .unwrap_err();
+
+        assert!(error.to_string().contains("TAU_VERSION"), "{error}");
+    }
+
+    #[test]
+    fn test_dev_remote_server_is_still_built_from_source() {
+        let version =
+            remote_server_version(ReleaseChannel::Dev, None, Version::new(1, 30, 0)).unwrap();
+
+        assert_eq!(version, Version::new(1, 30, 0));
+        assert_eq!(
+            remote_server_binary_name(ReleaseChannel::Dev, "build"),
+            "tau-remote-server-dev-build"
+        );
+    }
 
     #[test]
     fn test_parse_platform() {

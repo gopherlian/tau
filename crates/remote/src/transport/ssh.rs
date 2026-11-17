@@ -2,7 +2,10 @@ use crate::{
     RemoteArch, RemoteClientDelegate, RemoteOs, RemotePlatform,
     command::{RemoteCommand, home_relative_path, home_stdio_launcher_command},
     remote_client::{CommandTemplate, Interactive, RemoteConnection, RemoteConnectionOptions},
-    transport::{HOME_DIR_ARGS, HOME_DIR_PROGRAM, parse_home_dir, parse_platform, parse_shell},
+    transport::{
+        HOME_DIR_ARGS, HOME_DIR_PROGRAM, parse_home_dir, parse_platform, parse_shell,
+        remote_server_binary_name, remote_server_version,
+    },
 };
 use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
@@ -15,7 +18,7 @@ use futures::{
 use gpui::{App, AppContext as _, AsyncApp, Task};
 use parking_lot::Mutex;
 use paths::remote_server_dir_relative;
-use release_channel::{AppVersion, ReleaseChannel};
+use release_channel::{AppVersion, ReleaseChannel, TAU_VERSION};
 use rpc::proto::Envelope;
 use semver::Version;
 pub use settings_content::SshPortForwardOption;
@@ -1005,8 +1008,11 @@ impl SshRemoteConnection {
             ssh_home_dir,
         };
 
-        let (release_channel, version) =
-            cx.update(|cx| (ReleaseChannel::global(cx), AppVersion::global(cx)));
+        let (release_channel, version) = cx.update(|cx| {
+            let release_channel = ReleaseChannel::global(cx);
+            remote_server_version(release_channel, TAU_VERSION.clone(), AppVersion::global(cx))
+                .map(|version| (release_channel, version))
+        })?;
         this.remote_binary_path = Some(
             this.ensure_server_binary(&delegate, release_channel, version, cx)
                 .await?,
@@ -1027,9 +1033,8 @@ impl SshRemoteConnection {
             _ => version.to_string(),
         };
         let binary_name = format!(
-            "zed-remote-server-{}-{}{}",
-            release_channel.dev_name(),
-            version_str,
+            "{}{}",
+            remote_server_binary_name(release_channel, &version_str),
             if self.ssh_platform.os.is_windows() {
                 ".exe"
             } else {
@@ -1078,16 +1083,16 @@ impl SshRemoteConnection {
             return Ok(dst_path.into());
         }
 
-        let wanted_version = cx.update(|cx| match release_channel {
-            ReleaseChannel::Nightly => Ok(None),
+        let wanted_version = match release_channel {
+            ReleaseChannel::Nightly => None,
             ReleaseChannel::Dev => {
                 anyhow::bail!(
                     "ZED_BUILD_REMOTE_SERVER is not set and no remote server exists at ({:?})",
                     dst_path
                 )
             }
-            _ => Ok(Some(AppVersion::global(cx))),
-        })?;
+            _ => Some(version.clone()),
+        };
 
         let tmp_path_compressed = remote_server_dir_relative().join(
             RelPath::from_unix_str(&format!(
