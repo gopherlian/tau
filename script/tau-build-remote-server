@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+help_info() {
+  echo "
+Usage: ${0##*/} [options]
+Build Tau's remote server for Linux x86_64 inside a Docker container, as a
+static musl binary that runs on any Linux host whatever its glibc version.
+
+Writes target/tau-remote-server/tau-remote-server-linux-x86_64.gz and its
+.sha256 file. Set TAU_VERSION to compile Tau's version in, as release builds do.
+See docs/tau/versioning.md.
+
+Options:
+  -h, --help    Display this help and exit.
+  "
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            help_info
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            help_info
+            exit 1
+            ;;
+    esac
+done
+
+cd "$(dirname "$0")/.."
+
+toolchain=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
+if [[ -z "$toolchain" ]]; then
+    echo "rust-toolchain.toml does not name a toolchain channel." >&2
+    exit 1
+fi
+
+arch=x86_64
+target="${arch}-unknown-linux-musl"
+asset="tau-remote-server-linux-${arch}.gz"
+output_dir="target/tau-remote-server"
+mkdir -p "${output_dir}/cargo-home" "${output_dir}/target" "${output_dir}/home"
+output_dir=$(realpath "$output_dir")
+
+# Official Zed servers are linked with musl-gcc, which AlmaLinux does not package,
+# so the build runs in a Debian container with the pinned Rust toolchain.
+image="tau-remote-server-builder:${toolchain}"
+docker build --quiet --tag "$image" --build-arg TOOLCHAIN="$toolchain" --build-arg TARGET="$target" - <<'DOCKERFILE'
+ARG TOOLCHAIN
+FROM docker.io/library/rust:${TOOLCHAIN}-bookworm
+ARG TARGET
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends musl-tools cmake \
+    && rm -rf /var/lib/apt/lists/*
+RUN rustup target add "${TARGET}"
+DOCKERFILE
+
+docker_options=(
+    --rm
+    --user "$(id -u):$(id -g)"
+    --volume "${PWD}:/tau:ro"
+    --volume "${output_dir}:/output"
+    --workdir /tau
+    --env HOME=/output/home
+    --env CARGO_HOME=/output/cargo-home
+    --env CARGO_TARGET_DIR=/output/target
+    # rust-toolchain.toml would make rustup install the editor's extra targets
+    # and components; the server only needs the pinned compiler.
+    --env RUSTUP_TOOLCHAIN="$toolchain"
+    --env "CC_${target//-/_}=musl-gcc"
+    --env TARGET="$target"
+    --env ASSET="$asset"
+)
+if [[ -n "${TAU_VERSION:-}" ]]; then
+    docker_options+=(--env TAU_VERSION="$TAU_VERSION")
+fi
+
+docker run "${docker_options[@]}" "$image" bash -euo pipefail -c '
+cargo --config .cargo/bundle-config.toml build --release --locked --target "$TARGET" --package remote_server
+binary="/output/target/${TARGET}/release/remote-server"
+
+# A static binary has no program interpreter and needs no shared libraries.
+if readelf --program-headers "$binary" | grep -q INTERP || readelf --dynamic "$binary" | grep -q NEEDED; then
+    echo "${binary} is not statically linked:" >&2
+    readelf --dynamic "$binary" >&2
+    exit 1
+fi
+
+objcopy --strip-debug --discard-all "$binary" /output/remote-server
+gzip --force --best --stdout /output/remote-server > "/output/${ASSET}"
+rm /output/remote-server
+(cd /output && sha256sum "$ASSET" > "${ASSET}.sha256")
+'
+
+echo "Built ${output_dir}/${asset}"
