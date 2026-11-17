@@ -8,8 +8,9 @@ Usage: ${0##*/} [options]
 Build a Tau release package for Linux from a release branch whose HEAD has an
 annotated tau-vMAJOR.MINOR.PATCH tag.
 
-Wraps script/bundle-linux and writes target/release/tau-<version>-linux-<arch>.tar.gz
-and its .sha256 file. See docs/tau/versioning.md.
+Wraps script/bundle-linux, compiles the tag's version into the app as TAU_VERSION,
+and writes target/release/tau-<version>-linux-<arch>.tar.gz and its .sha256 file.
+See docs/tau/versioning.md.
 
 Options:
   -h, --help    Display this help and exit.
@@ -73,6 +74,7 @@ if [[ ! "$version" =~ $semantic_version ]]; then
     echo "Tag '$tag' is not a tau-vMAJOR.MINOR.PATCH semantic version tag." >&2
     exit 1
 fi
+export TAU_VERSION="$version"
 
 # Zed's update server would replace Tau with Zed, so automatic updates are turned
 # off at compile time, the same way Linux distributions package Zed.
