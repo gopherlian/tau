@@ -13,6 +13,9 @@ use std::{
 
 const RELEASES_URL: &str = "https://github.com/gopherlian/tau/releases/download";
 
+// A checksum file holds one hash and a file name, so anything bigger is not one.
+const MAX_CHECKSUM_FILE_BYTES: usize = 1024;
+
 /// The release asset with Tau's remote server for a host, such as
 /// `tau-remote-server-linux-x86_64.gz`.
 fn asset_name(os: &str, arch: &str) -> String {
@@ -78,8 +81,9 @@ async fn download_verified(
     destination: &Path,
 ) -> Result<()> {
     let checksum_url = format!("{url}.sha256");
-    let checksum_file = String::from_utf8(get(http_client.as_ref(), &checksum_url).await?)
-        .with_context(|| format!("{checksum_url} is not text"))?;
+    let checksum_file =
+        String::from_utf8(get_checksum_file(http_client.as_ref(), &checksum_url).await?)
+            .with_context(|| format!("{checksum_url} is not text"))?;
     let expected = checksum_file
         .split_whitespace()
         .next()
@@ -89,15 +93,7 @@ async fn download_verified(
         .with_context(|| format!("{checksum_url} does not start with a SHA-256 checksum"))?
         .to_ascii_lowercase();
 
-    let mut response = http_client
-        .get(url, AsyncBody::default(), true)
-        .await
-        .with_context(|| format!("downloading {url}"))?;
-    anyhow::ensure!(
-        response.status().is_success(),
-        "downloading {url} failed with {}",
-        response.status()
-    );
+    let mut response = request(http_client.as_ref(), url).await?;
 
     let directory = destination
         .parent()
@@ -129,8 +125,11 @@ async fn download_verified(
     Ok(())
 }
 
-async fn get(http_client: &dyn HttpClient, url: &str) -> Result<Vec<u8>> {
-    let mut response = http_client
+async fn request(
+    http_client: &dyn HttpClient,
+    url: &str,
+) -> Result<http_client::Response<AsyncBody>> {
+    let response = http_client
         .get(url, AsyncBody::default(), true)
         .await
         .with_context(|| format!("downloading {url}"))?;
@@ -139,8 +138,22 @@ async fn get(http_client: &dyn HttpClient, url: &str) -> Result<Vec<u8>> {
         "downloading {url} failed with {}",
         response.status()
     );
+    Ok(response)
+}
+
+async fn get_checksum_file(http_client: &dyn HttpClient, url: &str) -> Result<Vec<u8>> {
+    let mut response = request(http_client, url).await?;
     let mut body = Vec::new();
-    response.body_mut().read_to_end(&mut body).await?;
+    // Reading one byte past the limit tells a file at the limit from a larger one.
+    response
+        .body_mut()
+        .take(MAX_CHECKSUM_FILE_BYTES as u64 + 1)
+        .read_to_end(&mut body)
+        .await?;
+    anyhow::ensure!(
+        body.len() <= MAX_CHECKSUM_FILE_BYTES,
+        "{url} is larger than {MAX_CHECKSUM_FILE_BYTES} bytes, so it is not a checksum file"
+    );
     Ok(body)
 }
 
@@ -272,6 +285,10 @@ mod tests {
             (
                 Some("not a checksum\n".to_string()),
                 "does not start with a SHA-256",
+            ),
+            (
+                Some(format!("{}\n", "a".repeat(2 * MAX_CHECKSUM_FILE_BYTES))),
+                "larger than",
             ),
         ] {
             let cache_dir = tempfile::tempdir().unwrap();
